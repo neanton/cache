@@ -19,6 +19,9 @@
         "psr/cache-implementation": "1.0",
         "psr/simple-cache-implementation": "1.0"
     },
+    "replace": {
+        "symfony/cache": "~3.4"
+    },
     "require": {
         "php": "^5.5.9|>=7.0.8",
         "psr/cache": "~1.0",
