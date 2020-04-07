@@ -17,6 +17,8 @@ use Predis\Connection\Factory;
 use Predis\Response\Status;
 use Symfony\Component\Cache\Exception\CacheException;
 use Symfony\Component\Cache\Exception\InvalidArgumentException;
+use Symfony\Component\Cache\Marshaller\DefaultMarshaller;
+use Symfony\Component\Cache\Marshaller\MarshallerInterface;
 
 /**
  * @author Aurimas Niekis <aurimas@niekis.lt>
@@ -36,6 +38,7 @@ trait RedisTrait
         'lazy' => false,
     ];
     private $redis;
+    private $marshaller;
 
     /**
      * @param \Redis|\RedisArray|\RedisCluster|\Predis\Client $redisClient
@@ -51,6 +54,7 @@ trait RedisTrait
             throw new InvalidArgumentException(sprintf('"%s()" expects parameter 1 to be Redis, RedisArray, RedisCluster or Predis\Client, "%s" given.', __METHOD__, \is_object($redisClient) ? \get_class($redisClient) : \gettype($redisClient)));
         }
         $this->redis = $redisClient;
+        $this->marshaller = new DefaultMarshaller();
     }
 
     /**
@@ -190,7 +194,7 @@ trait RedisTrait
 
         foreach ($values as $id => $v) {
             if ($v) {
-                $result[$id] = parent::unserialize($v);
+                $result[$id] = $this->marshaller->unmarshall($v);
             }
         }
 
@@ -296,23 +300,12 @@ trait RedisTrait
      */
     protected function doSave(array $values, $lifetime)
     {
-        $serialized = [];
-        $failed = [];
-
-        foreach ($values as $id => $value) {
-            try {
-                $serialized[$id] = serialize($value);
-            } catch (\Exception $e) {
-                $failed[] = $id;
-            }
-        }
-
-        if (!$serialized) {
+        if (!$values = $this->marshaller->marshall($values, $failed)) {
             return $failed;
         }
 
-        $results = $this->pipeline(function () use ($serialized, $lifetime) {
-            foreach ($serialized as $id => $value) {
+        $results = $this->pipeline(function () use ($values, $lifetime) {
+            foreach ($values as $id => $value) {
                 if (0 >= $lifetime) {
                     yield 'set' => [$id, $value];
                 } else {
